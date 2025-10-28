@@ -1,0 +1,275 @@
+diff --git a/node_modules/@prefecthq/prefect-ui-library/src/schemas/components/SchemaFormPropertyFile.vue b/node_modules/@prefecthq/prefect-ui-library/src/schemas/components/SchemaFormPropertyFile.vue
+new file mode 100644
+index 0000000..0260b70
+--- /dev/null
++++ b/node_modules/@prefecthq/prefect-ui-library/src/schemas/components/SchemaFormPropertyFile.vue
+@@ -0,0 +1,242 @@
++<template>
++  <div class="schema-form-property-file">
++    <div v-if="!fileInfo" class="file-input-wrapper">
++      <input
++        ref="fileInput"
++        type="file"
++        :accept="accept"
++        :disabled="state === 'disabled' || isLoading"
++        class="file-input"
++        @change="handleFileChange"
++      >
++    </div>
++    <div v-else class="file-preview">
++      <div class="file-info">
++        <span class="file-name">{{ fileInfo.name }}</span>
++        <span class="file-size">{{ formatFileSize(fileInfo.size) }}</span>
++      </div>
++      <button
++        type="button"
++        class="clear-button"
++        :disabled="isLoading"
++        @click="clearFile"
++      >
++        ×
++      </button>
++    </div>
++    <p v-if="error" class="error-message">
++      {{ error }}
++    </p>
++    <p v-if="isLoading" class="loading-message">
++      Processing file...
++    </p>
++    <p class="help-text">
++      Max file size: {{ formatFileSize(maxSizeBytes) }}
++    </p>
++  </div>
++</template>
++
++<script lang="ts" setup>
++  import { State } from '@prefecthq/prefect-design'
++  import { ref, computed } from 'vue'
++
++  const props = defineProps<{
++    value: string | undefined,
++    state: State,
++    maxSize?: number,
++    accept?: string,
++  }>()
++
++  const emit = defineEmits<{
++    'update:value': [string | undefined],
++  }>()
++
++  const DEFAULT_MAX_SIZE = 10 * 1024 * 1024 // 10MB
++  const maxSizeBytes = computed(() => props.maxSize ?? DEFAULT_MAX_SIZE)
++
++  const fileInput = ref<HTMLInputElement>()
++  const fileInfo = ref<{ name: string; size: number } | null>(null)
++  const error = ref<string | null>(null)
++  const isLoading = ref(false)
++
++  const formatFileSize = (bytes: number): string => {
++    if (bytes === 0) return '0 Bytes'
++    const k = 1024
++    const sizes = ['Bytes', 'KB', 'MB', 'GB']
++    const i = Math.floor(Math.log(bytes) / Math.log(k))
++    return `${Math.round((bytes / Math.pow(k, i)) * 100) / 100} ${sizes[i]}`
++  }
++
++  const fileToBase64 = (file: File): Promise<string> => {
++    return new Promise((resolve, reject) => {
++      const reader = new FileReader()
++
++      reader.onload = () => {
++        try {
++          const arrayBuffer = reader.result as ArrayBuffer
++          const bytes = new Uint8Array(arrayBuffer)
++          let binary = ''
++          for (let i = 0; i < bytes.byteLength; i++) {
++            binary += String.fromCharCode(bytes[i])
++          }
++          const base64 = btoa(binary)
++          resolve(base64)
++        } catch (err) {
++          reject(err)
++        }
++      }
++
++      reader.onerror = () => {
++        reject(new Error('Failed to read file'))
++      }
++
++      reader.readAsArrayBuffer(file)
++    })
++  }
++
++  const handleFileChange = async (event: Event): Promise<void> => {
++    const target = event.target as HTMLInputElement
++    const file = target.files?.[0]
++
++    if (!file) {
++      return
++    }
++
++    error.value = null
++
++    // Validate file size
++    if (file.size > maxSizeBytes.value) {
++      error.value = `File size (${formatFileSize(file.size)}) exceeds maximum allowed size (${formatFileSize(maxSizeBytes.value)})`
++      if (fileInput.value) {
++        fileInput.value.value = ''
++      }
++      return
++    }
++
++    isLoading.value = true
++
++    try {
++      const base64String = await fileToBase64(file)
++
++      fileInfo.value = {
++        name: file.name,
++        size: file.size,
++      }
++
++      emit('update:value', base64String)
++    } catch (err) {
++      error.value = `Failed to process file: ${err instanceof Error ? err.message : 'Unknown error'}`
++      if (fileInput.value) {
++        fileInput.value.value = ''
++      }
++    } finally {
++      isLoading.value = false
++    }
++  }
++
++  const clearFile = (): void => {
++    fileInfo.value = null
++    error.value = null
++    emit('update:value', undefined)
++    if (fileInput.value) {
++      fileInput.value.value = ''
++    }
++  }
++</script>
++
++<style scoped>
++.schema-form-property-file {
++  display: flex;
++  flex-direction: column;
++  gap: 0.5rem;
++}
++
++.file-input-wrapper {
++  width: 100%;
++}
++
++.file-input {
++  width: 100%;
++  padding: 0.5rem;
++  border: 1px solid #cbd5e0;
++  border-radius: 0.375rem;
++  font-size: 0.875rem;
++  cursor: pointer;
++}
++
++.file-input:disabled {
++  opacity: 0.5;
++  cursor: not-allowed;
++}
++
++.file-preview {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  padding: 0.75rem;
++  border: 1px solid #cbd5e0;
++  border-radius: 0.375rem;
++  background-color: #f7fafc;
++}
++
++.file-info {
++  display: flex;
++  flex-direction: column;
++  gap: 0.25rem;
++  flex: 1;
++  min-width: 0;
++}
++
++.file-name {
++  font-weight: 500;
++  font-size: 0.875rem;
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++}
++
++.file-size {
++  font-size: 0.75rem;
++  color: #718096;
++}
++
++.clear-button {
++  flex-shrink: 0;
++  width: 1.5rem;
++  height: 1.5rem;
++  border: none;
++  background: none;
++  font-size: 1.5rem;
++  line-height: 1;
++  cursor: pointer;
++  color: #718096;
++  padding: 0;
++}
++
++.clear-button:hover {
++  color: #2d3748;
++}
++
++.clear-button:disabled {
++  opacity: 0.5;
++  cursor: not-allowed;
++}
++
++.error-message {
++  color: #e53e3e;
++  font-size: 0.875rem;
++  margin: 0;
++}
++
++.loading-message {
++  color: #718096;
++  font-size: 0.875rem;
++  margin: 0;
++}
++
++.help-text {
++  color: #718096;
++  font-size: 0.75rem;
++  margin: 0;
++}
++</style>
+diff --git a/node_modules/@prefecthq/prefect-ui-library/src/schemas/components/SchemaFormPropertyString.vue b/node_modules/@prefecthq/prefect-ui-library/src/schemas/components/SchemaFormPropertyString.vue
+index bc98969..b3dd2d7 100644
+--- a/node_modules/@prefecthq/prefect-ui-library/src/schemas/components/SchemaFormPropertyString.vue
++++ b/node_modules/@prefecthq/prefect-ui-library/src/schemas/components/SchemaFormPropertyString.vue
+@@ -7,6 +7,7 @@
+   import { computed } from 'vue'
+   import SchemaFormPropertyDate from '@/schemas/components/SchemaFormPropertyDate.vue'
+   import SchemaFormPropertyDateTime from '@/schemas/components/SchemaFormPropertyDateTime.vue'
++  import SchemaFormPropertyFile from '@/schemas/components/SchemaFormPropertyFile.vue'
+   import { useSchemaProperty } from '@/schemas/compositions/useSchemaProperty'
+   import { SchemaProperty } from '@/schemas/types/schema'
+   import { isString, withProps } from '@/utilities'
+@@ -52,6 +53,14 @@
+       })
+     }
+ 
++    if (format === 'base64' || format === 'binary') {
++      return withProps(SchemaFormPropertyFile, {
++        value: props.value,
++        state: props.state,
++        'onUpdate:value': update,
++      })
++    }
++
+     if (stringEnum) {
+       return withProps(PCombobox, {
+         modelValue: props.value,
