@@ -46,6 +46,59 @@ def has_v2_type_as_param(signature: inspect.Signature) -> bool:
     return False
 
 
+def _flatten_uploaded_file_refs(schema: dict[str, t.Any]) -> None:
+    """
+    Post-process a JSON schema to flatten UploadedFile references.
+
+    Replaces references to UploadedFile with a simple string type with format: base64.
+    This allows the UI to render a file upload field instead of a complex object form.
+
+    The function modifies the schema in-place.
+    """
+    # Check if this schema has properties (parameter definitions)
+    if "properties" not in schema:
+        return
+
+    properties = schema["properties"]
+    definitions = schema.get("definitions", {})
+
+    # Look for UploadedFile references in properties
+    for prop_name, prop_schema in properties.items():
+        # Check if this property references UploadedFile
+        if "$ref" in prop_schema:
+            ref = prop_schema["$ref"]
+            # Extract the definition name from the reference
+            # e.g., "#/definitions/UploadedFile" -> "UploadedFile"
+            if "/" in ref:
+                def_name = ref.split("/")[-1]
+                # Check if this is an UploadedFile by looking at the definition
+                if def_name in definitions:
+                    definition = definitions[def_name]
+                    # Check if this definition has the structure of UploadedFile
+                    # (has a 'content' field with format: base64)
+                    if _is_uploaded_file_definition(definition):
+                        # Replace the reference with a simple string + format: base64
+                        properties[prop_name] = {
+                            "type": "string",
+                            "format": "base64",
+                            "title": prop_schema.get("title", prop_name),
+                            "description": definition.get("description", "Upload a file"),
+                        }
+
+
+def _is_uploaded_file_definition(definition: dict[str, t.Any]) -> bool:
+    """
+    Check if a schema definition represents an UploadedFile type.
+
+    Returns True if the definition has a 'content' property with format: base64.
+    """
+    if "properties" not in definition:
+        return False
+
+    content_prop = definition["properties"].get("content", {})
+    return content_prop.get("format") == "base64"
+
+
 def process_v2_params(
     param: inspect.Parameter,
     *,
@@ -106,5 +159,9 @@ def create_v2_schema(
     # ensure backwards compatibility by copying $defs into definitions
     if "$defs" in schema:
         schema["definitions"] = schema["$defs"]
+
+    # Post-process: flatten UploadedFile references to string with format: base64
+    # This allows the UI to render a simple file upload field instead of an object
+    _flatten_uploaded_file_refs(schema)
 
     return schema

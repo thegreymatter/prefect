@@ -8,6 +8,7 @@ import orjson
 import pydantic
 
 from ._datetime import DateTime, Date
+from ._file import UploadedFile
 from .names import (
     Name,
     NameOrEmpty,
@@ -261,4 +262,5 @@ __all__ = [
     "StrictVariableValue",
     "TaskRetryDelaySeconds",
     "URILike",
+    "UploadedFile",
 ]
