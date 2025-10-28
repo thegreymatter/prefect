@@ -60,15 +60,21 @@ def _flatten_uploaded_file_refs(schema: dict[str, t.Any]) -> None:
         return
 
     properties = schema["properties"]
+    # Check both definitions and $defs (pydantic v2 uses $defs)
     definitions = schema.get("definitions", {})
+    if not definitions and "$defs" in schema:
+        definitions = schema["$defs"]
 
     # Look for UploadedFile references in properties
-    for prop_name, prop_schema in properties.items():
+    for prop_name, prop_schema in list(properties.items()):
+        replaced = False
+
         # Check if this property references UploadedFile
         if "$ref" in prop_schema:
             ref = prop_schema["$ref"]
             # Extract the definition name from the reference
             # e.g., "#/definitions/UploadedFile" -> "UploadedFile"
+            # or "#/$defs/UploadedFile" -> "UploadedFile"
             if "/" in ref:
                 def_name = ref.split("/")[-1]
                 # Check if this is an UploadedFile by looking at the definition
@@ -84,6 +90,28 @@ def _flatten_uploaded_file_refs(schema: dict[str, t.Any]) -> None:
                             "title": prop_schema.get("title", prop_name),
                             "description": definition.get("description", "Upload a file"),
                         }
+                        replaced = True
+
+        # Also check for allOf pattern which pydantic sometimes uses
+        if not replaced and "allOf" in prop_schema:
+            for item in prop_schema["allOf"]:
+                if "$ref" in item:
+                    ref = item["$ref"]
+                    if "/" in ref:
+                        def_name = ref.split("/")[-1]
+                        if def_name in definitions:
+                            definition = definitions[def_name]
+                            if _is_uploaded_file_definition(definition):
+                                # Get title from allOf structure if present
+                                title = prop_schema.get("title", prop_name)
+                                desc = definition.get("description", "Upload a file")
+                                properties[prop_name] = {
+                                    "type": "string",
+                                    "format": "base64",
+                                    "title": title,
+                                    "description": desc,
+                                }
+                                break
 
 
 def _is_uploaded_file_definition(definition: dict[str, t.Any]) -> bool:
@@ -95,8 +123,32 @@ def _is_uploaded_file_definition(definition: dict[str, t.Any]) -> bool:
     if "properties" not in definition:
         return False
 
-    content_prop = definition["properties"].get("content", {})
-    return content_prop.get("format") == "base64"
+    properties = definition["properties"]
+
+    # Check for 'content' field with format: base64
+    content_prop = properties.get("content", {})
+
+    # Check if format is directly on the property
+    if content_prop.get("format") == "base64":
+        return True
+
+    # Check in json_schema_extra (sometimes pydantic puts it there)
+    if "json_schema_extra" in content_prop:
+        extra = content_prop["json_schema_extra"]
+        if isinstance(extra, dict) and extra.get("format") == "base64":
+            return True
+
+    # Check if content has allOf with format
+    if "allOf" in content_prop:
+        for item in content_prop["allOf"]:
+            if item.get("format") == "base64":
+                return True
+
+    # Also check the definition title to see if it contains "UploadedFile"
+    if "UploadedFile" in definition.get("title", ""):
+        return True
+
+    return False
 
 
 def process_v2_params(

@@ -60,8 +60,27 @@ class UploadedFile(pydantic.BaseModel):
         json_schema_extra={
             "description": "Upload a file",
             "format": "base64",
+            "x-uploaded-file": True,  # Marker for schema post-processing
         }
     )
+
+    @classmethod
+    def __get_pydantic_json_schema__(cls, core_schema, handler):
+        """
+        Customize the JSON schema to appear as a simple string with format: base64.
+
+        This makes the UI render a file upload field instead of an object form.
+        """
+        # Get the default schema
+        json_schema = handler(core_schema)
+
+        # Replace the object schema with a simple string schema
+        return {
+            "type": "string",
+            "format": "base64",
+            "title": json_schema.get("title", "UploadedFile"),
+            "description": json_schema.get("description", "Upload a file"),
+        }
 
     @pydantic.model_validator(mode="before")
     @classmethod
