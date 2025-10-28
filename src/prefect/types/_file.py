@@ -8,10 +8,12 @@ making it easy to accept files through the UI without manual base64 handling.
 from __future__ import annotations
 
 import base64
-from typing import Optional
+from typing import Any, Optional
 
 import pydantic
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, GetJsonSchemaHandler
+from pydantic.json_schema import JsonSchemaValue
+from pydantic_core import core_schema as cs
 
 
 class UploadedFile(pydantic.BaseModel):
@@ -65,7 +67,9 @@ class UploadedFile(pydantic.BaseModel):
     )
 
     @classmethod
-    def __get_pydantic_json_schema__(cls, core_schema, handler):
+    def __get_pydantic_json_schema__(
+        cls, core_schema: cs.CoreSchema, handler: GetJsonSchemaHandler
+    ) -> JsonSchemaValue:
         """
         Customize the JSON schema to appear as a simple string with format: base64.
 
