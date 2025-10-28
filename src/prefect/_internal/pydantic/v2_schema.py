@@ -83,13 +83,20 @@ def _flatten_uploaded_file_refs(schema: dict[str, t.Any]) -> None:
                     # Check if this definition has the structure of UploadedFile
                     # (has a 'content' field with format: base64)
                     if _is_uploaded_file_definition(definition):
-                        # Replace the reference with a simple string + format: base64
-                        properties[prop_name] = {
+                        # Create new schema preserving existing fields except $ref
+                        new_schema = {k: v for k, v in prop_schema.items() if k != "$ref"}
+                        # Add the flattened type info
+                        new_schema.update({
                             "type": "string",
                             "format": "base64",
-                            "title": prop_schema.get("title", prop_name),
-                            "description": definition.get("description", "Upload a file"),
-                        }
+                        })
+                        # Ensure title and description are set
+                        if "title" not in new_schema:
+                            new_schema["title"] = prop_name
+                        if "description" not in new_schema:
+                            new_schema["description"] = definition.get("description", "Upload a file")
+
+                        properties[prop_name] = new_schema
                         replaced = True
 
         # Also check for allOf pattern which pydantic sometimes uses
@@ -102,15 +109,20 @@ def _flatten_uploaded_file_refs(schema: dict[str, t.Any]) -> None:
                         if def_name in definitions:
                             definition = definitions[def_name]
                             if _is_uploaded_file_definition(definition):
-                                # Get title from allOf structure if present
-                                title = prop_schema.get("title", prop_name)
-                                desc = definition.get("description", "Upload a file")
-                                properties[prop_name] = {
+                                # Create new schema preserving existing fields except allOf
+                                new_schema = {k: v for k, v in prop_schema.items() if k != "allOf"}
+                                # Add the flattened type info
+                                new_schema.update({
                                     "type": "string",
                                     "format": "base64",
-                                    "title": title,
-                                    "description": desc,
-                                }
+                                })
+                                # Ensure title and description are set
+                                if "title" not in new_schema:
+                                    new_schema["title"] = prop_name
+                                if "description" not in new_schema:
+                                    new_schema["description"] = definition.get("description", "Upload a file")
+
+                                properties[prop_name] = new_schema
                                 break
 
 
@@ -118,8 +130,18 @@ def _is_uploaded_file_definition(definition: dict[str, t.Any]) -> bool:
     """
     Check if a schema definition represents an UploadedFile type.
 
-    Returns True if the definition has a 'content' property with format: base64.
+    Returns True if:
+    - The definition is a string with format: base64 (from __get_pydantic_json_schema__)
+    - OR the definition has a 'content' property with format: base64 (raw schema)
     """
+    # Check if it's already been transformed to a string with format: base64
+    if definition.get("type") == "string" and definition.get("format") == "base64":
+        # Also verify it's likely an UploadedFile by checking the title
+        title = definition.get("title", "")
+        if "UploadedFile" in title or "Upload" in definition.get("description", ""):
+            return True
+
+    # Check for the original object structure with content property
     if "properties" not in definition:
         return False
 
@@ -143,10 +165,6 @@ def _is_uploaded_file_definition(definition: dict[str, t.Any]) -> bool:
         for item in content_prop["allOf"]:
             if item.get("format") == "base64":
                 return True
-
-    # Also check the definition title to see if it contains "UploadedFile"
-    if "UploadedFile" in definition.get("title", ""):
-        return True
 
     return False
 
