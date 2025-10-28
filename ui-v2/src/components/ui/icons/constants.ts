@@ -1,6 +1,7 @@
 import {
 	AlignJustify,
 	AlignVerticalJustifyStart,
+	AlertCircle,
 	Ban,
 	Bot,
 	Box,
@@ -22,6 +23,7 @@ import {
 	EllipsisVertical,
 	Expand,
 	ExternalLink,
+	File,
 	Image,
 	Info,
 	LayoutGrid,
@@ -51,6 +53,7 @@ import {
 export const ICONS = {
 	AlignJustify,
 	AlignVerticalJustifyStart,
+	AlertCircle,
 	Ban,
 	Bot,
 	Box,
@@ -72,6 +75,7 @@ export const ICONS = {
 	EllipsisVertical,
 	Expand,
 	ExternalLink,
+	File,
 	Image,
 	Info,
 	LayoutGrid,

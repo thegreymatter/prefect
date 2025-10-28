@@ -4,6 +4,7 @@ import { SchemaFormInputEnum } from "./schema-form-input-enum";
 import { SchemaFormInputStringFormatDate } from "./schema-form-input-string-format-date";
 import { SchemaFormInputStringFormatDateTime } from "./schema-form-input-string-format-datetime";
 import { SchemaFormInputStringFormatJson } from "./schema-form-input-string-format-json";
+import { SchemaFormInputStringFormatBase64 } from "./schema-form-input-string-format-base64";
 import { isWithPrimitiveEnum } from "./types/schemas";
 
 export type SchemaFormInputStringProps = {
@@ -58,6 +59,16 @@ export function SchemaFormInputString({
 	if (property.format === "json-string") {
 		return (
 			<SchemaFormInputStringFormatJson
+				value={value}
+				onValueChange={handleChange}
+				id={id}
+			/>
+		);
+	}
+
+	if (property.format === "base64" || property.format === "binary") {
+		return (
+			<SchemaFormInputStringFormatBase64
 				value={value}
 				onValueChange={handleChange}
 				id={id}
